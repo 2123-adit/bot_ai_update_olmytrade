@@ -84,6 +84,32 @@
         </div>
     </div>
 
+    {{-- Doji Analytics Section --}}
+    <div id="detail-doji-section" class="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 mb-6 shadow-sm hidden">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="text-center md:text-left">
+                <h3 class="text-sm font-extrabold text-indigo-900 flex items-center justify-center md:justify-start gap-2">
+                    📊 Analisa Doji Khusus Market Ini
+                </h3>
+                <p class="text-xs text-indigo-700 mt-1">Dihitung otomatis ketika muncul Signal FALSE berdasarkan data 5x lipat dari jumlah FALSE aktif.</p>
+            </div>
+            <div class="flex flex-wrap justify-center gap-2 sm:gap-4 items-center">
+                <div class="text-center bg-white px-3 sm:px-4 py-2 rounded-xl shadow-sm border border-indigo-50 w-24 sm:w-auto">
+                    <p class="text-[9px] sm:text-[10px] uppercase font-bold text-gray-500 mb-0.5">Candle Dicek</p>
+                    <p class="text-base sm:text-lg font-black text-dark" id="doji-detail-candles">0</p>
+                </div>
+                <div class="text-center bg-white px-3 sm:px-4 py-2 rounded-xl shadow-sm border border-indigo-50 w-24 sm:w-auto">
+                    <p class="text-[9px] sm:text-[10px] uppercase font-bold text-gray-500 mb-0.5">Total Doji</p>
+                    <p class="text-base sm:text-lg font-black text-indigo-600" id="doji-detail-count">0</p>
+                </div>
+                <div class="text-center bg-indigo-600 px-3 sm:px-4 py-2 rounded-xl shadow-sm w-24 sm:w-auto">
+                    <p class="text-[9px] sm:text-[10px] uppercase font-bold text-indigo-200 mb-0.5">Winrate</p>
+                    <p class="text-base sm:text-lg font-black text-white" id="doji-detail-winrate">0%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div
         class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 flex flex-col relative w-full">
         <div
@@ -91,7 +117,7 @@
             <div class="flex items-center gap-2">
                 <h3 class="text-sm font-extrabold text-dark flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_#3b82f6]"></span>
-                    Live Market Chart
+                    Live Market Data
                 </h3>
                 <span
                     class="text-[9px] sm:text-[10px] font-bold text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm"
@@ -111,15 +137,15 @@
         <div class="p-1 sm:p-4 bg-white w-full overflow-hidden">
             <div id="local-chart-container" class="w-full min-h-[300px] sm:min-h-[380px]">
                 <div class="flex h-full items-center justify-center text-gray-400 font-bold py-20 text-xs sm:text-base">
-                    Menyiapkan Mesin Grafik...</div>
+                    Menyiapkan Data...</div>
             </div>
         </div>
         <div
             class="px-3 sm:px-5 py-2 sm:py-3 bg-blue-50/50 text-[10px] sm:text-xs font-medium text-blue-800 border-t border-blue-100 flex items-start gap-2 sm:gap-3 w-full">
             <span class="text-sm sm:text-base">ℹ️</span>
-            <p class="leading-relaxed">Grafik <b>Candlestick Simulasi</b> ini dibuat akurat berdasarkan histori warna
-                candle dari bot Anda. Warna Hijau menandakan candle naik (TRUE), Warna Merah menandakan candle turun
-                (FALSE). Garis kuning adalah tren SMA.</p>
+            <p class="leading-relaxed">Data <b>Open, High, Low, Close</b> ini dikalkulasi secara simulasi akurat berdasarkan histori warna
+                candle dari bot Anda. Warna Hijau menandakan candle naik, Warna Merah menandakan candle turun.
+            </p>
         </div>
     </div>
 

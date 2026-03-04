@@ -56,8 +56,9 @@ class Connection:
                 self._is_connected = False
                 self.websocket = None
                 raise ConnectionError(f"Invalid status code {e.status_code}") from e
-            except (websockets.exceptions.WebSocketException, OSError, asyncio.TimeoutError) as e:
-                logger.error(f"❌ Connection failed: {e}")
+            except Exception as e:
+                import traceback
+                logger.error(f"❌ Connection failed: {e}\n{traceback.format_exc()}")
                 self._is_connected = False
                 self.websocket = None
                 raise ConnectionError(f"Connection failed: {e}") from e

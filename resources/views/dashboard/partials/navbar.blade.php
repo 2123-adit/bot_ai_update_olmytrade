@@ -55,8 +55,6 @@
                     id="nav-link-trade">Trade Manual</a>
                 <a href="#" onclick="showView('rodis')" class="transition hover:text-gojek text-indigo-600"
                     id="nav-link-rodis">RODIS (Auto)</a>
-                <a href="#" onclick="showView('doji')" class="transition hover:text-gojek"
-                    id="nav-link-doji">Analisa Doji</a>
                 <a href="#" onclick="showView('history')" class="transition hover:text-gojek"
                     id="nav-link-history">Riwayat</a>
             </div>
@@ -68,8 +66,6 @@
                     id="nav-link-trade-mob">Manual</a>
                 <a href="#" onclick="showView('rodis')" class="text-indigo-600 whitespace-nowrap"
                     id="nav-link-rodis-mob">RODIS Auto</a>
-                <a href="#" onclick="showView('doji')" class="whitespace-nowrap"
-                    id="nav-link-doji-mob">Doji</a>
                 <a href="#" onclick="showView('history')" class="whitespace-nowrap"
                     id="nav-link-history-mob">Riwayat</a>
             </div>
@@ -84,10 +80,16 @@
                 <span class="text-sm sm:text-lg font-extrabold text-indigo-600" id="nav-order-val">$10.00</span>
             </div>
 
-            {{-- Balance --}}
-            <div class="bg-gray-50 border border-gray-200 px-3 sm:px-4 py-2 rounded-xl flex items-center justify-center gap-1 sm:gap-2 shadow-sm flex-1 md:flex-none">
-                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:inline">Saldo :</span>
-                <span class="text-sm sm:text-lg font-extrabold text-gojek" id="nav-balance">$0.00</span>
+            {{-- Saldo DEMO --}}
+            <div class="bg-blue-50 border border-blue-200 px-3 sm:px-4 py-2 rounded-xl flex items-center justify-center gap-1 sm:gap-2 shadow-sm flex-1 md:flex-none" title="Saldo Demo">
+                <span class="text-[9px] font-bold text-blue-400 uppercase tracking-widest hidden sm:inline">Demo :</span>
+                <span class="text-sm sm:text-lg font-extrabold text-blue-600" id="nav-balance-demo">$0.00</span>
+            </div>
+
+            {{-- Saldo REAL --}}
+            <div class="bg-green-50 border border-green-200 px-3 sm:px-4 py-2 rounded-xl flex items-center justify-center gap-1 sm:gap-2 shadow-sm flex-1 md:flex-none" title="Saldo Real">
+                <span class="text-[9px] font-bold text-green-500 uppercase tracking-widest hidden sm:inline">Real :</span>
+                <span class="text-sm sm:text-lg font-extrabold text-green-600" id="nav-balance-real">$0.00</span>
             </div>
 
             {{-- Dark/Light Toggle Desktop --}}
@@ -139,10 +141,22 @@
                 {{-- Account Select --}}
                 <div class="mb-4">
                     <label class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Target Account ID</label>
-                    <select id="account-id"
+                    <select id="account-id" onchange="onAccountChanged(this)"
                         class="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 font-bold text-xs text-blue-800 transition-all cursor-pointer">
                         <option value="">-- Pilih Akun --</option>
                     </select>
+                </div>
+
+                {{-- Saldo Demo dan Real --}}
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center cursor-pointer hover:bg-blue-100 transition-colors" onclick="selectAccountByType('Demo')">
+                        <p class="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5 pointer-events-none">💻 Demo</p>
+                        <p class="text-sm font-extrabold text-blue-600 pointer-events-none" id="dd-balance-demo">-</p>
+                    </div>
+                    <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-center cursor-pointer hover:bg-green-100 transition-colors" onclick="selectAccountByType('Real')">
+                        <p class="text-[9px] font-bold text-green-500 uppercase tracking-wider mb-0.5 pointer-events-none">💵 Real</p>
+                        <p class="text-sm font-extrabold text-green-600 pointer-events-none" id="dd-balance-real">-</p>
+                    </div>
                 </div>
 
                 <div class="border-t border-gray-100 my-3"></div>

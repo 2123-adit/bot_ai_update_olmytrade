@@ -1,10 +1,9 @@
-<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-
 <script>
     let dashboardInterval, detailInterval, historyInterval, rodisInterval;
     let currentMarket = "";
     let activeMarketsList = [];
     let selectedTradeMarket = "";
+    let _accountsCache = [];   // Demo/Real account list cache
 
     let detailCurrentPage = 1;
     const detailItemsPerPage = 10;
@@ -90,18 +89,14 @@
     }
 
     function renderLocalChart(historyData, marketName) {
-        if (typeof ApexCharts === 'undefined') {
-            setTimeout(() => renderLocalChart(historyData, marketName), 500);
-            return;
-        }
-
         const marketLabel = document.getElementById('local-chart-market');
         if (marketLabel) marketLabel.innerText = `${marketName} (${currentChartTimeframe})`;
 
+        const container = document.getElementById('local-chart-container');
+        if (!container) return;
+
         if (!historyData || historyData.length === 0) {
-            if (localChartInstance) { localChartInstance.destroy(); localChartInstance = null; }
-            document.getElementById('local-chart-container').innerHTML =
-                '<div class="flex h-full items-center justify-center text-gray-400 font-bold text-xs sm:text-base py-20">Menunggu bot merekam data pergerakan...</div>';
+            container.innerHTML = '<div class="flex h-full items-center justify-center text-gray-400 font-bold text-xs sm:text-base py-20">Menunggu bot merekam data pergerakan...</div>';
             return;
         }
 
@@ -109,114 +104,115 @@
         if (currentChartTimeframe === '5M')  candleCount = 40;
         if (currentChartTimeframe === '15M') candleCount = 20;
 
-        let chartData = [...historyData].slice(0, candleCount).reverse();
-        let basePrice = 1000.50;
-        let candlestickData = [];
-        let maData = [];
-
-        chartData.forEach((item) => {
-            let isGreen = item.warna === 'Hijau';
-            let rnd = getDeterministicSize(item.tanggal + item.waktu);
-            let bodySize = (rnd * 8) + 3;
-            let wickTop = ((rnd * 13) % 4) + 1;
-            let wickBot = ((rnd * 17) % 4) + 1;
-            let open = basePrice;
-            let close, high, low;
-            if (isGreen) { close = open + bodySize; high = close + wickTop; low = open - wickBot; }
-            else          { close = open - bodySize; high = open + wickTop;  low = close - wickBot; }
-            basePrice = close;
-            candlestickData.push({ x: item.waktu, y: [open, high, low, close] });
+        let historyMap = {};
+        historyData.forEach(item => {
+            historyMap[item.waktu] = item;
         });
 
-        for (let i = 0; i < candlestickData.length; i++) {
-            if (i < 4) { maData.push({ x: candlestickData[i].x, y: null }); }
-            else {
-                let sum = 0;
-                for (let j = 0; j < 5; j++) sum += candlestickData[i - j].y[3];
-                maData.push({ x: candlestickData[i].x, y: sum / 5 });
+        let latestItem = historyData[0];
+        let [hh, mm] = latestItem.waktu.split(':').map(Number);
+        
+        let continuousData = [];
+        for (let i = 0; i < candleCount; i++) {
+            let m = mm - i;
+            let h = hh;
+            while (m < 0) {
+                m += 60;
+                h -= 1;
             }
-        }
-
-        // Detect dark mode for chart theme
-        const isDark = document.documentElement.classList.contains('dark');
-        let isMobile = window.innerWidth < 640;
-
-        let options = {
-            series: [
-                { name: 'Candle Harga', type: 'candlestick', data: candlestickData },
-                { name: 'SMA (5)',       type: 'line',         data: maData }
-            ],
-            chart: {
-                height: isMobile ? 300 : 380,
-                width: '100%',
-                type: 'candlestick',
-                fontFamily: 'inherit',
-                toolbar: { show: false },
-                animations: { enabled: false },
-                redrawOnParentResize: true,
-                background: isDark ? '#0d1117' : '#ffffff',
-            },
-            theme: { mode: isDark ? 'dark' : 'light' },
-            plotOptions: {
-                candlestick: {
-                    colors: { upward: '#22c55e', downward: '#ef4444' },
-                    wick: { useFillColor: true }
+            if (h < 0) h += 24;
+            
+            let timeStr = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+            
+            if (historyMap[timeStr]) {
+                continuousData.push(historyMap[timeStr]);
+            } else {
+                let hash = 0;
+                for (let c = 0; c < timeStr.length; c++) {
+                    hash = timeStr.charCodeAt(c) + ((hash << 5) - hash);
                 }
-            },
-            colors: ['#000000', '#f59e0b'],
-            stroke: { width: [1, 2], curve: 'smooth' },
-            xaxis: {
-                type: 'category',
-                labels: {
-                    rotate: -45,
-                    style: { fontSize: isMobile ? '8px' : '10px', colors: isDark ? '#8b949e' : '#94a3b8' },
-                    hideOverlappingLabels: true,
-                    trim: true
-                },
-                tickAmount: isMobile ? 8 : 15,
-                tooltip: { enabled: false }
-            },
-            yaxis: {
-                labels: {
-                    style: { fontSize: isMobile ? '9px' : '11px', fontWeight: '600', colors: isDark ? '#8b949e' : '#64748b' },
-                    formatter: function(val) { return val ? val.toFixed(2) : val; }
-                },
-                tickAmount: isMobile ? 4 : 6
-            },
-            grid: {
-                borderColor: isDark ? '#21262d' : '#e2e8f0',
-                strokeDashArray: 4,
-                padding: { left: 5, right: 5, bottom: 0 }
-            },
-            tooltip: {
-                shared: true,
-                intersect: false,
-                theme: isDark ? 'dark' : 'light',
-                y: { formatter: function(val) { return val ? val.toFixed(2) : val; } }
-            },
-            legend: {
-                position: 'top',
-                horizontalAlign: isMobile ? 'center' : 'right',
-                fontSize: isMobile ? '10px' : '12px',
-                labels: { colors: isDark ? '#c9d1d9' : '#374151' }
+                let isGreen = (hash % 2 === 0);
+                continuousData.push({
+                    waktu: timeStr,
+                    tanggal: latestItem.tanggal,
+                    warna: isGreen ? 'Hijau' : 'Merah'
+                });
             }
-        };
-
-        if (!localChartInstance) {
-            document.getElementById('local-chart-container').innerHTML = '';
-            localChartInstance = new ApexCharts(document.querySelector("#local-chart-container"), options);
-            localChartInstance.render();
-        } else {
-            localChartInstance.updateOptions({
-                chart: { height: isMobile ? 300 : 380, background: isDark ? '#0d1117' : '#ffffff' },
-                theme: { mode: isDark ? 'dark' : 'light' },
-                grid: { borderColor: isDark ? '#21262d' : '#e2e8f0' }
-            });
-            localChartInstance.updateSeries([
-                { name: 'Candle Harga', data: candlestickData },
-                { name: 'SMA (5)',      data: maData }
-            ]);
         }
+        
+        continuousData.reverse();
+
+        let basePrice = 1000.50;
+        let firstValid = continuousData.find(i => i.open_price !== undefined && i.open_price !== null && i.open_price !== 0);
+        if (firstValid) basePrice = parseFloat(firstValid.open_price);
+
+        let tableRows = '';
+
+        continuousData.forEach((item) => {
+            let isGreen = item.warna === 'Hijau';
+            let open, close, high, low;
+            
+            if (item.open_price !== undefined && item.open_price !== null && item.open_price !== 0) {
+                // Menggunakan data aktual dari OlympTrade
+                open = parseFloat(item.open_price);
+                close = parseFloat(item.close_price);
+                high = parseFloat(item.high_price);
+                low = parseFloat(item.low_price);
+                basePrice = close; // update untuk interpolasi gap selanjutnya
+            } else {
+                // Membuat data simulasi deterministik hanya untuk mengisi celah menit yang hilang
+                let rnd = getDeterministicSize(item.tanggal + item.waktu);
+                let bodySize = (rnd * 5) + 2;
+                let wickTop = ((rnd * 11) % 3) + 0.5;
+                let wickBot = ((rnd * 13) % 3) + 0.5;
+                
+                open = basePrice;
+                if (isGreen) { close = open + bodySize; high = close + wickTop; low = open - wickBot; }
+                else          { close = open - bodySize; high = open + wickTop;  low = close - wickBot; }
+                basePrice = close;
+            }
+            
+            let textColor = isGreen ? 'text-green-600' : 'text-red-500';
+            let dotColor  = isGreen ? 'bg-green-500' : 'bg-red-500';
+            let decimals  = open < 10 ? 4 : (open < 100 ? 3 : 2); // adaptasi letak desimal berdasarkan harga
+            
+            tableRows = `
+                <tr class="hover:bg-gray-50/50 transition-colors border-b border-gray-100 group">
+                    <td class="py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-bold text-gray-700 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>
+                            ${item.waktu}
+                        </div>
+                    </td>
+                    <td class="py-2.5 px-3 sm:px-4 text-xs font-semibold ${textColor}">${open.toFixed(decimals)}</td>
+                    <td class="py-2.5 px-3 sm:px-4 text-xs font-semibold ${textColor}">${high.toFixed(decimals)}</td>
+                    <td class="py-2.5 px-3 sm:px-4 text-xs font-semibold ${textColor}">${low.toFixed(decimals)}</td>
+                    <td class="py-2.5 px-3 sm:px-4 text-xs font-black ${textColor}">${close.toFixed(decimals)}</td>
+                </tr>` + tableRows;
+        });
+        // Hapus instance chart jika sebelumnya ada, lalu isi container dengan table
+        if (localChartInstance) {
+            try { localChartInstance.destroy(); } catch(e) {}
+            localChartInstance = null;
+        }
+
+        container.innerHTML = `
+            <div class="overflow-x-auto w-full max-h-[300px] sm:max-h-[380px] overflow-y-auto custom-scrollbar rounded-xl border border-gray-100 shadow-inner bg-gray-50/30 text-left">
+                <table class="w-full text-left border-collapse min-w-[350px]">
+                    <thead class="sticky top-0 bg-white shadow-sm z-10 border-b border-gray-200">
+                        <tr>
+                            <th class="py-3 px-3 sm:px-4 bg-gray-50 text-[10px] sm:text-xs font-extrabold text-gray-500 uppercase tracking-wider">Waktu</th>
+                            <th class="py-3 px-3 sm:px-4 bg-gray-50 text-[10px] sm:text-xs font-extrabold text-gray-500 uppercase tracking-wider">Open</th>
+                            <th class="py-3 px-3 sm:px-4 bg-gray-50 text-[10px] sm:text-xs font-extrabold text-gray-500 uppercase tracking-wider">High</th>
+                            <th class="py-3 px-3 sm:px-4 bg-gray-50 text-[10px] sm:text-xs font-extrabold text-gray-500 uppercase tracking-wider">Low</th>
+                            <th class="py-3 px-3 sm:px-4 bg-gray-50 text-[10px] sm:text-xs font-extrabold text-gray-500 uppercase tracking-wider">Close</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100/80 bg-white">
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>`;
     }
 
     window.addEventListener('resize', () => {
@@ -286,13 +282,59 @@
     // ================================================================
     window.onload = function() {
         fetch(`${API_BASE}/get_settings`).then(res => res.json()).then(data => {
-            if (data.token)      document.getElementById('token').value = data.token;
+            // Gunakan token dari DB, atau fallback ke localStorage
+            const savedToken = data.token || localStorage.getItem('rodis_token') || '';
+            if (savedToken) {
+                document.getElementById('token').value = savedToken;
+            }
             if (data.account_id) {
                 const select = document.getElementById('account-id');
                 if (!select.querySelector(`option[value="${data.account_id}"]`)) {
                     select.innerHTML += `<option value="${data.account_id}">ID: ${data.account_id} (Tersimpan)</option>`;
                 }
                 select.value = data.account_id;
+            }
+            // Auto-fetch balances jika ada token tersimpan
+            if (savedToken) {
+                fetch(`${API_BASE}/check_accounts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: savedToken })
+                }).then(r => r.json()).then(accData => {
+                    if (accData.status === 'success') {
+                        _accountsCache = accData.accounts || [];
+                        const sel = document.getElementById('account-id');
+                        if (sel) {
+                            const savedId = data.account_id;
+                            sel.innerHTML = '<option value="">-- Pilih Akun --</option>';
+                            let hasSavedId = false;
+                            
+                            _accountsCache.forEach(acc => {
+                                const typeLabel = acc.type === 'Demo' ? '💻 Demo' : '💵 Real';
+                                const opt = document.createElement('option');
+                                opt.value = acc.id;
+                                opt.text  = `${typeLabel} — ${acc.id} (${formatCurrency(acc.balance)})`;
+                                if (String(acc.id) === String(savedId)) {
+                                    opt.selected = true;
+                                    hasSavedId = true;
+                                }
+                                sel.appendChild(opt);
+                            });
+                            
+                            // If no matching saved ID, default to Demo
+                            if (!hasSavedId) {
+                                const demoAcc = _accountsCache.find(a => a.type === 'Demo');
+                                if (demoAcc) {
+                                    sel.value = demoAcc.id;
+                                    onAccountChanged(sel);
+                                }
+                            } else {
+                                onAccountChanged(sel);
+                            }
+                        }
+                        updateAllBalanceUI(_accountsCache);
+                    }
+                }).catch(() => {});
             }
         });
 
@@ -321,12 +363,17 @@
     }
 
     function showView(viewName) {
+        document.getElementById('main-banner')?.classList.add('hidden');
         document.getElementById('view-dashboard').classList.add('hidden');
         document.getElementById('view-detail').classList.add('hidden');
         document.getElementById('view-trade').classList.add('hidden');
         document.getElementById('view-history').classList.add('hidden');
         document.getElementById('view-rodis').classList.add('hidden');
         document.getElementById('view-doji')?.classList.add('hidden');
+        
+        if (viewName === 'dashboard') {
+            document.getElementById('main-banner')?.classList.remove('hidden');
+        }
         document.getElementById('view-' + viewName).classList.remove('hidden');
 
         const navIds = [
@@ -356,8 +403,11 @@
             detailInterval = setInterval(refreshDetailData, 1500);
         } else if (viewName === 'trade') {
             fetch(`${API_BASE}/status_all`).then(res => res.json()).then(data => {
-                if (data.balance !== undefined && data.balance !== null)
-                    document.getElementById('nav-balance').innerText = formatCurrency(data.balance);
+                if (data.balance !== undefined && data.balance !== null) {
+                    // Update legacy balance if element exists (fallback)
+                    const nbLegacy = document.getElementById('nav-balance');
+                    if (nbLegacy) nbLegacy.innerText = formatCurrency(data.balance);
+                }
                 activeMarketsList = data.active_markets || [];
                 renderTradeMarkets();
             });
@@ -397,24 +447,60 @@
             btn.innerHTML = '🔍 Cek Akun';
             btn.disabled  = false;
             if (data.status === 'success') {
+                _accountsCache = data.accounts || [];
                 const select = document.getElementById('account-id');
                 const oldVal = select.value;
                 select.innerHTML = '<option value="">-- Pilih Akun --</option>';
-                data.accounts.forEach(acc => {
-                    const typeLabel = acc.type === 'Demo' ? '🎮 Demo' : '💼 Real';
+                _accountsCache.forEach(acc => {
+                    const typeLabel = acc.type === 'Demo' ? '💻 Demo' : '💵 Real';
                     const option    = document.createElement('option');
                     option.value    = acc.id;
-                    option.text     = `${typeLabel} - ${acc.id} (${formatCurrency(acc.balance)})`;
+                    option.text     = `${typeLabel} — ${acc.id} (${formatCurrency(acc.balance)})`;
                     select.appendChild(option);
                 });
-                if (oldVal) select.value = oldVal;
-                alert('✅ Akun berhasil dimuat! Silakan pilih di dropdown.');
+                // Handle default active selection
+                let selectedId = oldVal;
+                if (!selectedId) {
+                    const demoAcc = _accountsCache.find(a => a.type === 'Demo');
+                    if (demoAcc) selectedId = demoAcc.id;
+                }
+                
+                if (selectedId) {
+                    select.value = selectedId;
+                    onAccountChanged(select);
+                }
+                
+                // Also populate rodis account selector
+                const rodisSelArr = ['rodis-account-id'];
+                rodisSelArr.forEach(selId => {
+                    const sel = document.getElementById(selId);
+                    if (!sel) return;
+                    sel.innerHTML = '<option value="">-- Pilih Akun --</option>';
+                    _accountsCache.forEach(acc => {
+                        const typeLabel = acc.type === 'Demo' ? '💻 Demo' : '💵 Real';
+                        const opt = document.createElement('option');
+                        opt.value = acc.id;
+                        opt.text  = `${typeLabel} — ${acc.id}`;
+                        sel.appendChild(opt);
+                    });
+                    if (selectedId) sel.value = selectedId;
+                });
+                updateAllBalanceUI(_accountsCache);
+                // Simpan token ke DB dan localStorage agar tidak hilang saat refresh
+                localStorage.setItem('rodis_token', token);
+                fetch(`${API_BASE}/save_token`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                }).catch(() => {});
+                showPopup('✅ Akun berhasil dimuat! Silakan pilih akun Demo atau Real.', 'success');
             } else {
                 alert(data.message);
             }
-        }).catch(() => {
+        }).catch((err) => {
             btn.innerHTML = '🔍 Cek Akun';
             btn.disabled  = false;
+            showPopup('❌ Gagal mengecek akun. Pastikan Token benar dan Server/WARP berjalan lancar. Error: ' + err.message, 'error');
         });
     }
 
@@ -473,11 +559,11 @@
     // ================================================================
     // MARKET ACTIONS
     // ================================================================
-    function startAllMarkets() {
+    function startAllMarkets(event) {
         const token     = document.getElementById('token').value;
         const accountId = document.getElementById('account-id').value;
         if (!token || !accountId) { showPopup("⚠️ Harap isi Access Token & Target Account ID terlebih dahulu!", "error"); return; }
-        const btn = event.target;
+        const btn = event.currentTarget;
         let originalText = btn.innerHTML;
         btn.innerHTML = '⏳ Starting...';
         btn.disabled  = true;
@@ -576,7 +662,70 @@
     }
 
     // ================================================================
+    // ACCOUNT MANAGEMENT — Demo/Real switcher + Balance display
+    // ================================================================
+    function updateAllBalanceUI(accounts) {
+        let demoBalance = 0, realBalance = 0;
+        accounts.forEach(acc => {
+            if (acc.type === 'Demo') demoBalance = Math.max(demoBalance, acc.balance);
+            else realBalance = Math.max(realBalance, acc.balance);
+        });
+        ['nav-balance-demo', 'dd-balance-demo'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = formatCurrency(demoBalance);
+        });
+        ['nav-balance-real', 'dd-balance-real'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = formatCurrency(realBalance);
+        });
+        const nbLegacy = document.getElementById('nav-balance');
+        if (nbLegacy) nbLegacy.innerText = formatCurrency(demoBalance + realBalance);
+    }
+
+
+
+    function onAccountChanged(selectElem) {
+        if (!selectElem || !selectElem.value) return;
+        const acc = _accountsCache.find(a => String(a.id) === String(selectElem.value));
+        if (!acc) return;
+        const isDemo = acc.type === 'Demo';
+        const demoEl = document.getElementById('nav-balance-demo');
+        const realEl = document.getElementById('nav-balance-real');
+        // Highlight active account type pill in navbar
+        if (demoEl) {
+            demoEl.parentElement.classList.toggle('ring-2', isDemo);
+            demoEl.parentElement.classList.toggle('ring-blue-400', isDemo);
+        }
+        if (realEl) {
+            realEl.parentElement.classList.toggle('ring-2', !isDemo);
+            realEl.parentElement.classList.toggle('ring-green-400', !isDemo);
+        }
+    }
+
+    // Function to click card and auto select
+    window.selectAccountByType = function(type) {
+        if (!_accountsCache || _accountsCache.length === 0) return;
+        const acc = _accountsCache.find(a => a.type === type);
+        if (acc) {
+            const select = document.getElementById('account-id');
+            if (select) {
+                select.value = acc.id;
+                onAccountChanged(select);
+                
+                // Update rodis selector too
+                const rodisSel = document.getElementById('rodis-account-id');
+                if (rodisSel) rodisSel.value = acc.id;
+                
+                showPopup(`✅ Menggunakan Akun ${type} (${acc.id})`, 'success');
+            }
+        } else {
+            alert(`Akun ${type} tidak ditemukan! Pastikan sudah klik Cek Akun.`);
+        }
+    };
+
+    // ================================================================
     // RODIS BOT
+
     // ================================================================
     function logRodis(msg, color = "#4ade80") {
         const term    = document.getElementById('rodis-terminal');
@@ -718,7 +867,34 @@
     // ================================================================
     function renderMarketCards() {
         const container = document.getElementById('market-grid-container');
-        if (container) container.innerHTML = '';
+        if (!container) return;
+        container.innerHTML = '';
+
+        const startIdx = (currentPage - 1) * itemsPerPage;
+        const endIdx   = Math.min(startIdx + itemsPerPage, allMarkets.length);
+        const pageMarkets = allMarkets.slice(startIdx, endIdx);
+
+        pageMarkets.forEach(m => {
+            const isActive  = activeMarketsList.includes(m.id);
+            const statusDot = isActive
+                ? '<div class="w-2.5 h-2.5 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e] animate-pulse"></div>'
+                : '<div class="w-2.5 h-2.5 bg-gray-300 rounded-full"></div>';
+            const borderClass = isActive
+                ? 'border-green-200 bg-green-50/40 shadow-md'
+                : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm';
+
+            container.innerHTML += `
+                <div class="market-card cursor-pointer border-2 rounded-2xl p-4 flex flex-col items-center transition-all duration-200 ${borderClass}"
+                     data-market="${m.id}"
+                     onclick="openMarketDetail('${m.id}')">
+                    <div class="text-3xl mb-2">${m.icon}</div>
+                    <h4 class="font-bold text-dark text-xs sm:text-sm text-center leading-tight mb-1">${m.name}</h4>
+                    <span class="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-2">${m.cat}</span>
+                    ${statusDot}
+                </div>`;
+        });
+
+        renderPagination();
     }
 
     function renderTradeMarkets() {
@@ -746,6 +922,7 @@
     function renderPagination() {
         const totalPages = Math.ceil(allMarkets.length / itemsPerPage);
         const container  = document.getElementById('pagination-controls');
+        if (!container) return;
         container.innerHTML = '';
         const prevDisabled = currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100';
         container.innerHTML += `<button onclick="changePage(${currentPage - 1})" class="px-4 py-2 bg-white border rounded-xl text-sm font-bold ${prevDisabled}">Prev</button>`;
@@ -773,8 +950,10 @@
 
     function refreshDashboardStatus() {
         fetch(`${API_BASE}/status_all`).then(res => res.json()).then(data => {
-            if (data.balance !== undefined && data.balance !== null)
-                document.getElementById('nav-balance').innerText = formatCurrency(data.balance);
+            if (data.balance !== undefined && data.balance !== null) {
+                const nbLegacy = document.getElementById('nav-balance');
+                if (nbLegacy) nbLegacy.innerText = formatCurrency(data.balance);
+            }
 
             activeMarketsList = data.active_markets || [];
             syncPlayStopButton();
@@ -807,6 +986,10 @@
                 const totalMarket  = allMarkets.length;
                 const activeCount  = activeMarketsList.length;
                 const allConnected = (activeCount === totalMarket && totalMarket > 0);
+
+                // Ambil threshold dari input FALSE KE (realtime)
+                const falseTarget = parseInt(document.getElementById('mass-tg-loss')?.value) || 7;
+
                 let sortedMarkets  = Object.keys(data.market_streaks).sort((a, b) => data.market_streaks[b] - data.market_streaks[a]);
                 const highestStreak = sortedMarkets.length > 0 ? data.market_streaks[sortedMarkets[0]] : 0;
 
@@ -814,26 +997,39 @@
                     let streak  = data.market_streaks[mkt];
                     let mktObj  = allMarkets.find(x => x.id === mkt);
                     let mktName = mktObj ? mktObj.name : mkt;
+
+                    // Warna dinamis berdasarkan target dari input FALSE KE
                     let colorClass = 'bg-gray-50 text-gray-500 border-gray-200';
-                    if (streak >= 7) colorClass = 'bg-red-100 text-red-700 border-red-300 font-extrabold';
-                    else if (streak >= 5) colorClass = 'bg-orange-100 text-orange-700 border-orange-300 font-bold';
-                    else if (streak >= 3) colorClass = 'bg-yellow-100 text-yellow-700 border-yellow-300 font-bold';
-                    else if (streak >= 1) colorClass = 'bg-blue-50 text-blue-600 border-blue-200';
-                    let connectedClass = allConnected ? 'bg-green-100 text-green-800 border-green-300 font-bold' : '';
-                    let dangerGlow     = (streak === highestStreak && streak >= 7) ? 'danger-glow' : '';
+                    let dangerGlow = '';
+                    let entryBadge = '';
+
+                    if (streak >= falseTarget) {
+                        // Sudah mencapai / melewati target — highlight MERAH + glow
+                        colorClass = 'bg-red-100 text-red-700 border-red-400 font-extrabold';
+                        dangerGlow = 'danger-glow';
+                        entryBadge = `<span class="bg-red-500 text-white px-1.5 py-0.5 rounded text-[9px] font-extrabold ml-1 animate-pulse">SIAP!</span>`;
+                    } else if (streak >= falseTarget - 2) {
+                        // Mendekati target (2 false lagi)
+                        colorClass = 'bg-orange-100 text-orange-700 border-orange-300 font-bold';
+                    } else if (streak >= Math.max(1, falseTarget - 4)) {
+                        // Mulai mendekat
+                        colorClass = 'bg-yellow-50 text-yellow-700 border-yellow-200 font-semibold';
+                    } else if (streak >= 1) {
+                        colorClass = 'bg-blue-50 text-blue-600 border-blue-200';
+                    }
+
                     streakList.innerHTML += `
                         <div onclick="openMarketDetail('${mkt}')"
                             class="w-full px-3 py-1.5 rounded-lg border text-[11px] flex items-center justify-between
-                                   ${colorClass} ${connectedClass} ${dangerGlow}
+                                   ${colorClass} ${dangerGlow}
                                    transition-all duration-300 cursor-pointer hover:scale-[1.04] hover:shadow-md active:scale-95">
-                            <span class="truncate font-semibold">${mktName}</span>
-                            <span class="bg-white/90 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border border-white/50">False: ${streak}</span>
+                            <span class="truncate font-semibold">${mktName}${entryBadge}</span>
+                            <span class="bg-white/90 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border border-white/50">F: ${streak}/${falseTarget}</span>
                         </div>`;
                 });
             }
 
-            // DOJI ANALYTICS RENDER
-            renderDojiAnalytics(data.doji_analytics);
+
         });
     }
 
@@ -950,8 +1146,10 @@
     function refreshDetailData() {
         if (!currentMarket) return;
         fetch(`${API_BASE}/data?market=${encodeURIComponent(currentMarket)}`).then(res => res.json()).then(data => {
-            if (data.balance !== undefined && data.balance !== null)
-                document.getElementById('nav-balance').innerText = formatCurrency(data.balance);
+            if (data.balance !== undefined && data.balance !== null) {
+                const nbLegacy = document.getElementById('nav-balance');
+                if (nbLegacy) nbLegacy.innerText = formatCurrency(data.balance);
+            }
 
             if (data.is_running) {
                 document.getElementById('btn-start-bot').classList.add('hidden');
@@ -964,8 +1162,45 @@
             }
 
             document.getElementById('val-total').innerText = data.stats.total_trade;
-            let sigLoss = calculateSigLoss(data.history);
+
+            // Gunakan nilai dari backend (sama persis dengan Live Streak Monitor)
+            // doji_analytics.consecutive_false dihitung oleh Python calc_sig_loss
+            let sigLoss = (data.doji_analytics && data.doji_analytics.consecutive_false != null)
+                          ? data.doji_analytics.consecutive_false
+                          : 0;
             document.getElementById('val-sig-loss').innerText = sigLoss;
+
+            // Ambil target false dari input FALSE KE di Monitor (sinkron dengan streak-list)
+            const falseTgt = parseInt(document.getElementById('mass-tg-loss')?.value) || 7;
+            const targetOpEl = document.getElementById('val-target-op');
+            if (targetOpEl) {
+                targetOpEl.innerText = falseTgt;
+                // Ubah warna jadi merah jika false sudah mencapai/melewati target
+                const parentCard = targetOpEl.closest('.bg-indigo-50, [class*="indigo"]') || targetOpEl.parentElement?.parentElement;
+                if (sigLoss >= falseTgt) {
+                    targetOpEl.className = 'text-2xl font-extrabold text-red-600 animate-pulse';
+                } else if (sigLoss >= falseTgt - 2) {
+                    targetOpEl.className = 'text-2xl font-extrabold text-orange-500';
+                } else {
+                    targetOpEl.className = 'text-2xl font-extrabold text-indigo-900';
+                }
+            }
+
+            // Highlight kotak Signal FALSE jika mencapai target
+            const sigLossEl  = document.getElementById('val-sig-loss');
+            const sigLossBox = sigLossEl?.parentElement;
+            if (sigLossEl && sigLossBox) {
+                if (sigLoss >= falseTgt) {
+                    sigLossEl.innerText = `${sigLoss} / ${falseTgt} ✓`;
+                    sigLossBox.className = sigLossBox.className
+                        .replace('bg-red-50','').replace('border-red-200','')
+                        + ' bg-red-100 border-red-400';
+                    sigLossEl.className = 'text-2xl font-extrabold text-red-700 animate-pulse';
+                } else {
+                    sigLossEl.innerText = sigLoss;
+                    sigLossEl.className = 'text-2xl font-extrabold text-red-600';
+                }
+            }
 
             let sigWin = 0;
             if (data.history && data.history.length > 0) {
@@ -1015,6 +1250,7 @@
             }
 
             currentDetailHistory = data.history || [];
+            renderLocalDojiAnalytics(data.doji_analytics || null);
             renderLocalChart(currentDetailHistory, currentMarket);
 
             if (!data.is_running && currentDetailHistory.length === 0) {
@@ -1080,7 +1316,7 @@
     // STOP ALL / DEACTIVATE MASS TELEGRAM
     // ================================================================
     function stopAllMarkets(event) {
-        const btn = event.target;
+        const btn = event.currentTarget;
         let originalText = btn.innerHTML;
         btn.innerHTML = "⏳ Stopping...";
         btn.disabled  = true;
@@ -1134,76 +1370,266 @@
     // ================================================================
     // DOJI ANALYTICS
     // ================================================================
-    function renderDojiAnalytics(dojiData) {
-        const tbody = document.getElementById('doji-tbody');
-        if (!tbody) return;
+    function renderLocalDojiAnalytics(dojiData) {
+        const section = document.getElementById('detail-doji-section');
+        if (!section) return;
 
-        if (!dojiData || dojiData.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="px-6 py-12 text-center text-gray-400">
-                        <div class="flex flex-col items-center justify-center gap-3">
-                            <span class="bg-gray-50 p-4 rounded-full">
-                                <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                                </svg>
-                            </span>
-                            <p class="text-sm font-bold text-gray-500">Menunggu Data Market...</p>
-                            <p class="text-[11px] text-gray-400">Tabel ini akan otomatis terisi saat market menyentuh 1 s/d 9 False berturut-turut.</p>
-                        </div>
-                    </td>
-                </tr>`;
+        if (!dojiData || dojiData.consecutive_false < 1) {
+            section.classList.add('hidden');
             return;
         }
 
-        tbody.innerHTML = '';
-        dojiData.forEach(item => {
-            const mktObj   = allMarkets.find(x => x.id === item.market) || { name: item.market, icon: '📈' };
-            const mktName  = mktObj.name;
-            const mktIcon  = mktObj.icon;
-            
-            // Pewarnaan Winrate
-            let wrColor = 'text-green-600 bg-green-50';
-            let wrTextClass = 'text-green-700';
-            if (item.winrate < 20) {
-                wrColor = 'text-red-600 bg-red-50';
-                wrTextClass = 'text-red-700';
-            } else if (item.winrate < 50) {
-                wrColor = 'text-orange-600 bg-orange-50';
-                wrTextClass = 'text-orange-700';
+        section.classList.remove('hidden');
+        document.getElementById('doji-detail-candles').innerText = dojiData.total_candles;
+        document.getElementById('doji-detail-count').innerText = dojiData.doji_count;
+        document.getElementById('doji-detail-winrate').innerText = dojiData.winrate + '%';
+    }
+
+
+    // ================================================================
+    // RODIS AUTO — Martingale + Compound
+    // ================================================================
+
+    let rodisAutoInterval = null;
+    let rodisLogLastLen   = 0;
+
+    function loadRodisAccounts() {
+        const select = document.getElementById('rodis-account-id');
+        const settingsToken = document.getElementById('token')?.value || '';
+        if (!settingsToken) {
+            alert('Masukkan Access Token di Pusat Kendali terlebih dahulu!\nDan klik "Cek Akun" untuk memuat daftar akun.');
+            return;
+        }
+        // Gunakan akun yang sudah dimuat di select akun Pusat Kendali
+        const srcSelect = document.getElementById('account-id');
+        if (srcSelect && srcSelect.options.length > 1) {
+            select.innerHTML = '<option value="">-- Pilih Akun --</option>';
+            for (let i = 1; i < srcSelect.options.length; i++) {
+                const opt = document.createElement('option');
+                opt.value = srcSelect.options[i].value;
+                opt.text  = srcSelect.options[i].text;
+                select.appendChild(opt);
+            }
+            alert('✅ Daftar akun berhasil dimuat!');
+        } else {
+            alert('Belum ada akun. Pergi ke Pusat Kendali → klik "Cek Akun" terlebih dahulu.');
+        }
+    }
+
+    function updateRodisSimulator() {
+        const modal  = parseFloat(document.getElementById('rodis-modal')?.value) || 19;
+        const target = parseInt(document.getElementById('rodis-target-loss')?.value) || 9;
+        const entry  = Math.max(1, modal * 0.0535);
+
+        document.getElementById('rodis-f-entry')?.setAttribute('data-f', target + 1);
+        if (document.getElementById('rodis-f-entry')) document.getElementById('rodis-f-entry').innerText = target + 1;
+        if (document.getElementById('rodis-f-mg1')) document.getElementById('rodis-f-mg1').innerText = target + 2;
+        if (document.getElementById('rodis-f-mg2')) document.getElementById('rodis-f-mg2').innerText = target + 3;
+        if (document.getElementById('rodis-f-mg3')) document.getElementById('rodis-f-mg3').innerText = target + 4;
+
+        if (document.getElementById('rodis-bet-s1')) document.getElementById('rodis-bet-s1').innerText = '$' + entry.toFixed(2);
+        if (document.getElementById('rodis-bet-s2')) document.getElementById('rodis-bet-s2').innerText = '$' + (entry * 2.2).toFixed(2);
+        if (document.getElementById('rodis-bet-s3')) document.getElementById('rodis-bet-s3').innerText = '$' + (entry * 2.2 * 2.2).toFixed(2);
+        if (document.getElementById('rodis-bet-s4')) document.getElementById('rodis-bet-s4').innerText = '$' + (entry * 2.2 * 2.2 * 2.2).toFixed(2);
+
+        document.getElementById('rodis-bet-preview')?.classList.remove('hidden');
+    }
+
+    document.getElementById('rodis-modal')?.addEventListener('input', updateRodisSimulator);
+    document.getElementById('rodis-target-loss')?.addEventListener('input', updateRodisSimulator);
+
+    function startRodisAuto() {
+        const token      = document.getElementById('token')?.value || '';
+        const modal      = parseFloat(document.getElementById('rodis-modal')?.value) || 19;
+        const target     = parseInt(document.getElementById('rodis-target-loss')?.value) || 9;
+        const accountId  = document.getElementById('rodis-account-id')?.value || document.getElementById('account-id')?.value || '';
+        const stopLoss   = parseFloat(document.getElementById('rodis-stop-loss')?.value) || 0;
+
+        if (!token) return alert('⚠️ Harap isi Access Token di Pusat Kendali terlebih dahulu!');
+        if (modal <= 0) return alert('Modal harus lebih dari 0!');
+        if (target < 1) return alert('Target FALSE minimal 1!');
+        if (activeMarketsList.length === 0) return alert('⚠️ Belum ada market yang berjalan!\nSilakan klik tombol ▶ PLAY di halaman Monitor terlebih dahulu agar RODIS Auto bisa memantau market.');
+
+        fetch(`${API_BASE}/rodis_auto/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modal, target_false: target, account_id: accountId, stop_loss_daily: stopLoss, token: token })
+        }).then(r => r.json()).then(d => {
+            if (d.status === 'success') {
+                document.getElementById('btn-rodis-start').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-start').disabled = true;
+                document.getElementById('btn-rodis-stop').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-stop').disabled = false;
+                rodisLogLastLen = 0;
+                if (rodisAutoInterval) clearInterval(rodisAutoInterval);
+                rodisAutoInterval = setInterval(refreshRodisAutoStatus, 2500);
+                updateRodisSimulator();
+            } else {
+                alert('❌ ' + d.message);
+            }
+        }).catch(() => alert('Koneksi ke backend gagal. Pastikan python app.py berjalan.'));
+    }
+
+    function stopRodisAuto() {
+        fetch(`${API_BASE}/rodis_auto/stop`, { method: 'POST' })
+            .then(r => r.json()).then(() => {
+                if (rodisAutoInterval) { clearInterval(rodisAutoInterval); rodisAutoInterval = null; }
+                document.getElementById('btn-rodis-start').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-start').disabled = false;
+                document.getElementById('btn-rodis-stop').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-stop').disabled = true;
+                refreshRodisAutoStatus();
+            });
+    }
+
+    function refreshRodisAutoStatus() {
+        fetch(`${API_BASE}/rodis_auto/status`).then(r => r.json()).then(d => {
+            const stateColors = {
+                'IDLE':          'text-gray-400',
+                'SCANNING':      'text-blue-500',
+                'WAITING_ENTRY': 'text-yellow-500',
+                'TRADING':       'text-indigo-500',
+                'DONE_WIN':      'text-green-500',
+                'DONE_LOSS':     'text-red-500'
+            };
+            const stateEl = document.getElementById('rodis-state-badge');
+            if (stateEl) {
+                stateEl.innerHTML = d.state;
+                stateEl.className = 'text-sm font-black ' + (stateColors[d.state] || 'text-gray-400');
             }
 
-            tbody.innerHTML += `
-                <tr class="hover:bg-gray-50/80 transition-colors group cursor-pointer" onclick="openMarketDetail('${item.market}')">
-                    <td class="px-6 py-4 flex gap-3 items-center">
-                        <span class="text-2xl">${mktIcon}</span>
-                        <div>
-                            <p class="font-extrabold text-dark tracking-tight text-sm">${mktName}</p>
-                            <span class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">${item.market}</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <span class="inline-flex items-center gap-1 bg-red-50 border border-red-100 text-red-600 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm">
-                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                            ${item.consecutive_false} False
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <span class="text-xs font-bold text-gray-500 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">${item.total_candles} Candle</span>
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <div class="flex flex-col items-center">
-                            <span class="text-lg font-black text-indigo-600">${item.doji_count}</span>
-                            <span class="text-[10px] font-bold text-indigo-400 uppercase">Doji</span>
-                        </div>
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <div class="inline-flex flex-col items-center justify-center ${wrColor} px-4 py-2 rounded-xl border border-white/40 shadow-sm transition-transform group-hover:scale-105">
-                            <span class="text-lg font-black ${wrTextClass}">${item.winrate}%</span>
-                            <span class="text-[9px] uppercase font-bold tracking-wider opacity-80">Winrate Doji</span>
-                        </div>
-                    </td>
-                </tr>`;
+            const mktEl = document.getElementById('rodis-current-market');
+            if (mktEl) mktEl.innerText = d.current_market || '-';
+
+            const stepEl = document.getElementById('rodis-step-label');
+            if (stepEl) stepEl.innerText = d.step_label || '-';
+
+            const modalEl = document.getElementById('rodis-modal-now');
+            if (modalEl) modalEl.innerText = '$' + d.modal.toFixed(2);
+
+            const profEl = document.getElementById('rodis-total-profit');
+            if (profEl) {
+                profEl.innerText = (d.total_profit >= 0 ? '+' : '') + '$' + d.total_profit.toFixed(2);
+                profEl.className = 'text-base font-black ' + (d.total_profit >= 0 ? 'text-blue-600' : 'text-red-500');
+            }
+
+            const winEl = document.getElementById('rodis-total-win');
+            if (winEl) winEl.innerText = d.total_win;
+            const lossEl = document.getElementById('rodis-total-loss');
+            if (lossEl) lossEl.innerText = d.total_loss;
+
+            // Append new log entries
+            const terminal = document.getElementById('rodis-terminal');
+            if (terminal && d.log && d.log.length > rodisLogLastLen) {
+                const newLines = d.log.slice(rodisLogLastLen);
+                rodisLogLastLen = d.log.length;
+                if (rodisLogLastLen === newLines.length) {
+                    terminal.innerHTML = '';
+                }
+                newLines.forEach(line => {
+                    const div = document.createElement('div');
+                    div.className = 'mb-0.5 leading-relaxed';
+                    // Color coding
+                    if (line.includes('✅')) div.style.color = '#4ade80';
+                    else if (line.includes('❌')) div.style.color = '#f87171';
+                    else if (line.includes('🔄') || line.includes('📌')) div.style.color = '#fbbf24';
+                    else if (line.includes('🎯') || line.includes('🚀')) div.style.color = '#818cf8';
+                    else if (line.includes('🛑') || line.includes('⚠️')) div.style.color = '#f97316';
+                    else div.style.color = '#94a3b8';
+                    div.innerText = line;
+                    terminal.appendChild(div);
+                });
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+
+            // Sound Alert pada WIN/LOSS
+            if (d.state !== _prevRodisState) {
+                if (d.state === 'DONE_WIN')  playRodisSound('win');
+                if (d.state === 'DONE_LOSS') playRodisSound('loss');
+                _prevRodisState = d.state;
+            }
+
+            // If backend stopped, update buttons
+            if (!d.active) {
+                document.getElementById('btn-rodis-start').classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-start').disabled = false;
+                document.getElementById('btn-rodis-stop').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-rodis-stop').disabled = true;
+                if (rodisAutoInterval) { clearInterval(rodisAutoInterval); rodisAutoInterval = null; }
+            }
+        }).catch(() => {});
+    }
+
+    // Init simulator on page load
+    updateRodisSimulator();
+
+    // ================================================================
+    // SOUND ALERT (Feature 4) — Web Audio API, no file needed
+    // ================================================================
+    let _prevRodisState = 'IDLE';
+
+    function playRodisSound(type) {
+        const soundEnabled = document.getElementById('rodis-sound-enabled')?.checked !== false;
+        if (!soundEnabled) return;
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            if (type === 'win') {
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                osc.frequency.setValueAtTime(1046, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            } else if (type === 'loss') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, ctx.currentTime);
+                osc.frequency.setValueAtTime(120, ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            } else if (type === 'alert') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, ctx.currentTime);
+                osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+                osc.start(); osc.stop(ctx.currentTime + 0.4);
+            }
+        } catch(e) {}
+    }
+
+    // ─── SINKRONISASI FALSE KE → RODIS AUTO + PERSISTENT STORAGE ─────
+    const massTgLossInput = document.getElementById('mass-tg-loss');
+    if (massTgLossInput) {
+        // Restore nilai dari localStorage saat halaman dibuka
+        const savedFalseKe = localStorage.getItem('falseKeTarget');
+        if (savedFalseKe) {
+            massTgLossInput.value = savedFalseKe;
+            // Sync ke RODIS Auto juga
+            const rodisTarget = document.getElementById('rodis-target-loss');
+            if (rodisTarget) {
+                rodisTarget.value = savedFalseKe;
+                if (typeof updateRodisSimulator === 'function') updateRodisSimulator();
+            }
+        }
+
+        // Simpan ke localStorage & refresh setiap kali diubah
+        massTgLossInput.addEventListener('input', function () {
+            const newVal = this.value;
+            localStorage.setItem('falseKeTarget', newVal);
+
+            // Sync ke RODIS Auto
+            const rodisTarget = document.getElementById('rodis-target-loss');
+            if (rodisTarget) {
+                rodisTarget.value = newVal;
+                if (typeof updateRodisSimulator === 'function') updateRodisSimulator();
+            }
+            // Refresh streak-list langsung
+            if (typeof refreshDashboardStatus === 'function') refreshDashboardStatus();
         });
     }
 

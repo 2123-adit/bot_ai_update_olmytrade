@@ -7,7 +7,7 @@
 @endsection
 
 @section('content')
-    <div class="w-full h-screen relative group bg-gray-900 overflow-hidden shadow-xl mb-8 flex flex-col justify-end">
+    <div id="main-banner" class="w-full h-screen relative group bg-gray-900 overflow-hidden shadow-xl mb-8 flex flex-col justify-end">
         <img src="{{ asset('assets/images/tembokratapan-solo.png') }}" alt="Banner Tembok Ratapan Solo"
             class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-1000 group-hover:scale-105 opacity-80">
 
@@ -17,7 +17,6 @@
         @include('dashboard.sections.monitor')
         @include('dashboard.sections.detail')
         @include('dashboard.sections.rodis')
-        @include('dashboard.sections.doji')
         @include('dashboard.sections.manual')
         @include('dashboard.sections.history')
     </div>
