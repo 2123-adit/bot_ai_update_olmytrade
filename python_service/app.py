@@ -819,8 +819,9 @@ def api_check_accounts():
         else: return jsonify({"status": "error", "message": "Gagal menarik data. Token salah / expired."})
     except Exception as e: return jsonify({"status": "error", "message": "Koneksi terputus dari server."})
 
-@app.route('/api/start', methods=['POST'])
+@app.route('/api/start', methods=['POST', 'OPTIONS'])
 def start_bot():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     data = request.json
     market = data.get('market')
     token = data.get('token')
@@ -836,8 +837,9 @@ def start_bot():
     threading.Thread(target=run_trading_bot_thread, args=(market, token, account_id), daemon=True).start()
     return jsonify({"status": "success", "message": f"Koneksi {market} berhasil dibuka!"})
 
-@app.route('/api/start_all', methods=['POST'])
+@app.route('/api/start_all', methods=['POST', 'OPTIONS'])
 def start_all():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     data = request.json
     token = data.get('token')
     account_id = data.get('account_id')
@@ -857,8 +859,9 @@ def start_all():
     threading.Thread(target=start_all_bg, daemon=True).start()
     return jsonify({"status": "success", "message": f"Memulai {len(ASSET_MAPPING)} market secara bertahap!"})
 
-@app.route('/api/stop', methods=['POST'])
+@app.route('/api/stop', methods=['POST', 'OPTIONS'])
 def stop_bot():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     market = request.json.get('market')
     if market in markets_data: markets_data[market]['is_running'] = 0
     conn = get_db_connection()
@@ -867,8 +870,9 @@ def stop_bot():
         conn.commit(); conn.close()
     return jsonify({"status": "success"})
 
-@app.route('/api/stop_all', methods=['POST'])
+@app.route('/api/stop_all', methods=['POST', 'OPTIONS'])
 def stop_all():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     for m in markets_data.values(): m['is_running'] = 0
     conn = get_db_connection()
     if not conn: return jsonify({"status": "error"})
@@ -937,8 +941,9 @@ def stop_telegram_all():
     conn.commit(); conn.close()
     return jsonify({"status": "success", "message": "Sinyal Telegram di SEMUA market berhasil dimatikan!"})
 
-@app.route('/api/manual_trade', methods=['POST'])
+@app.route('/api/manual_trade', methods=['POST', 'OPTIONS'])
 def manual_trade():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     data = request.json
     market = data.get('market')
     if market in markets_data:
@@ -1046,8 +1051,9 @@ def send_telegram():
 # RODIS AUTO API ENDPOINTS
 # ==========================================
 
-@app.route('/api/rodis_auto/start', methods=['POST'])
+@app.route('/api/rodis_auto/start', methods=['POST', 'OPTIONS'])
 def rodis_auto_start():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     data          = request.json or {}
     modal         = float(data.get('modal', 19))
     target        = int(data.get('target_false', 9))
@@ -1092,8 +1098,9 @@ def rodis_auto_start():
     return jsonify({"status": "success", "message": "RODIS Auto berhasil dimulai!"})
 
 
-@app.route('/api/rodis_auto/stop', methods=['POST'])
+@app.route('/api/rodis_auto/stop', methods=['POST', 'OPTIONS'])
 def rodis_auto_stop():
+    if request.method == 'OPTIONS': return jsonify({}), 200
     rodis_auto_state["active"] = False
     rodis_auto_state["state"]  = "IDLE"
     rodis_log("🛑 Perintah STOP diterima.")
